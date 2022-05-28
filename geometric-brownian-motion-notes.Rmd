@@ -1,0 +1,73 @@
+---
+title: "Geometric Brownian Motion"
+output: html_notebook
+---
+
+These notes follow the code provided in [Kirs Longmore's tutorial](https://robotwealth.com/efficiently-simulating-geometric-brownian-motion-in-r/).
+
+## Libraries
+```{r libraries, message=FALSE}
+library(tidyverse)
+```
+
+
+## General Formula
+Geometric Brownian motion is a stochastic differential equation of the form:
+
+$$
+S(t) = S_0\left(\left(\mu - \frac{\sigma^2}{2}\right)t + \sigma B_t\right) 
+$$
+
+where $S_0$ is the initial value, $\mu$ is the drift coefficient, $\sigma$ is the volatility coefficient, $t$ is the current time period, and $B_t$ is the Brownian motion and $B_t \sim N(0,t)$ for all $t$.
+
+## Simulation Model
+
+```{r sim-model}
+gbm_vec <- function(nsim, S0, t, mu, sigma, dt = 1./365){
+  B <- matrix(rnorm(t*nsim), ncol = nsim, nrow = t)
+  
+  # get GBM and convert to price paths
+  gbm <- exp((mu - sigma * sigma / 2) * dt + sigma * B * sqrt(dt))
+  gbm <- apply(rbind(rep(S0, nsim), gbm), 2, cumprod)
+  
+  return(gbm)
+}
+
+nsim <- 50
+t <- 100
+mu <- 0
+sigma <- 0.1
+S0 <- 100
+
+gbm <- gbm_vec(nsim, S0, t, mu, sigma)
+colnames(gbm) <- paste("Sim_", 1:nsim)
+
+gbm_df <- gbm %>%
+  as_tibble() %>%
+  mutate(index = 1:nrow(gbm)) %>%
+  pivot_longer(-index, names_to = 'sim', values_to = 'price')
+
+gbm_df %>%
+  ggplot(aes(x = index, y = price, color = sim)) +
+  geom_line() +
+  theme(legend.position = 'none')
+```
+
+## Price Distribution
+```{r price-distribution}
+nsim <- 20000
+t <- 100
+mu <- 0
+sigma <- 0.1
+S0 <- 100
+
+gbm <- gbm_vec(nsim, S0, t, mu, sigma)
+price_df <- tibble(price = gbm[t, ]) #last price
+price_df %>%
+  ggplot(aes(x = price)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1) +
+  geom_density()
+
+```
+
+From here we can use this distribution in a Monte Carlo simulation.
